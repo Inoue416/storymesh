@@ -1,0 +1,10 @@
+[package]
+name = "storymesh"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Audit Storybook story coverage and report gaps."
+license = "MIT"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
