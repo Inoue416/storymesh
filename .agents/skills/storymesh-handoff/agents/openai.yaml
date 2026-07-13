@@ -1,0 +1,4 @@
+interface:
+  display_name: "Storymesh Handoff"
+  short_description: "Select and run the smallest valid quality gate"
+  default_prompt: "Use $storymesh-handoff to select and run the smallest valid verification gate for my current changes."

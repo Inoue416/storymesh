@@ -1,0 +1,31 @@
+# Balanced project defaults. Override per task with scripts/codex-task.
+model_reasoning_effort = "medium"
+model_reasoning_summary = "concise"
+model_verbosity = "low"
+
+# Keep persistent repository guidance bounded so every turn starts cheaply.
+project_doc_max_bytes = 8192
+project_root_markers = [".git", "Cargo.toml"]
+
+# Project-local config is loaded only after this repository is trusted by Codex.
+sandbox_mode = "workspace-write"
+
+[features]
+hooks = true
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = '"$(git rev-parse --show-toplevel)/.codex/hooks/session-context"'
+timeout = 10
+statusMessage = "Inspecting Storymesh worktree"
+
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = '"$(git rev-parse --show-toplevel)/.codex/hooks/stop-quality-gate"'
+timeout = 10
+statusMessage = "Checking Storymesh handoff evidence"

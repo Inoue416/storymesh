@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+input="$(cat)"
+if [[ "$(jq -r '.stop_hook_active // false' <<<"$input")" == "true" ]]; then
+  echo '{}'
+  exit 0
+fi
+
+cwd="$(jq -r '.cwd // empty' <<<"$input")"
+if [[ -z "$cwd" ]] || ! root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)"; then
+  echo '{}'
+  exit 0
+fi
+
+checker="$root/.agents/skills/storymesh-handoff/scripts/check-change"
+if [[ ! -x "$checker" ]]; then
+  jq -n '{systemMessage: "Storymesh handoff checker is missing or not executable."}'
+  exit 0
+fi
+
+set +e
+status="$({ cd "$root" && "$checker" --status; } 2>&1)"
+code=$?
+set -e
+
+if (( code == 0 )); then
+  echo '{}'
+  exit 0
+fi
+if (( code != 1 )); then
+  jq -n --arg detail "$status" '{systemMessage: ("Could not inspect Storymesh handoff status: " + $detail)}'
+  exit 0
+fi
+
+gate="${status##* }"
+reason="Current changes have no matching successful handoff evidence. Run \`mise run handoff\` (selected gate: \`mise run ${gate}\`), inspect the final diff, then report the result."
+jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'

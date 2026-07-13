@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/codex-task [fast|standard|deep] [OPTIONS] [PROMPT]
+
+Modes:
+  fast      Low reasoning for docs, mechanical edits, and known small fixes.
+  standard  Medium reasoning for normal implementation work (default).
+  deep      High reasoning for architecture, security, or subtle correctness.
+
+Options:
+  --exec             Run non-interactively with `codex exec`.
+  --json-log PATH    Run `codex exec --json`, save JSONL, and print token metrics.
+  --dry-run          Print the resolved command without starting Codex.
+  -h, --help         Show this help.
+
+Examples:
+  scripts/codex-task fast "Update the README examples"
+  scripts/codex-task standard --exec "Implement issue 12 and run mise run verify"
+  scripts/codex-task deep --json-log .codex-runs/review.jsonl "Review this branch"
+EOF
+}
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mode="standard"
+kind="interactive"
+json_log=""
+dry_run=false
+
+if [[ ${1:-} == "fast" || ${1:-} == "standard" || ${1:-} == "deep" ]]; then
+  mode="$1"
+  shift
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --exec)
+      kind="exec"
+      shift
+      ;;
+    --json-log)
+      [[ $# -ge 2 ]] || { echo "--json-log requires a path" >&2; exit 2; }
+      kind="json"
+      json_log="$2"
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+case "$mode" in
+  fast)
+    effort="low"
+    verbosity="low"
+    ;;
+  standard)
+    effort="medium"
+    verbosity="low"
+    ;;
+  deep)
+    effort="high"
+    verbosity="medium"
+    ;;
+esac
+
+command=(
+  codex
+  --cd "$root"
+  --strict-config
+  --config "model_reasoning_effort=\"$effort\""
+  --config "model_verbosity=\"$verbosity\""
+)
+
+if [[ "$kind" == "exec" || "$kind" == "json" ]]; then
+  command+=(exec)
+fi
+if [[ "$kind" == "json" ]]; then
+  command+=(--json)
+fi
+command+=("$@")
+
+if [[ "$dry_run" == true ]]; then
+  printf '%q ' "${command[@]}"
+  printf '\n'
+  exit 0
+fi
+
+if [[ "$kind" != "json" ]]; then
+  exec "${command[@]}"
+fi
+
+mkdir -p "$(dirname "$json_log")"
+set +e
+"${command[@]}" | tee "$json_log"
+status=${PIPESTATUS[0]}
+set -e
+"$root/scripts/codex-metrics" "$json_log" >&2
+exit "$status"

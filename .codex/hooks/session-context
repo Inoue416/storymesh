@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+input="$(cat)"
+cwd="$(jq -r '.cwd // empty' <<<"$input")"
+if [[ -z "$cwd" ]] || ! root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)"; then
+  echo '{}'
+  exit 0
+fi
+
+status="$(git -C "$root" status --short --untracked-files=normal | sed -n '1,12p')"
+if [[ -z "$status" ]]; then
+  echo '{}'
+  exit 0
+fi
+
+count="$(git -C "$root" status --short --untracked-files=normal | wc -l | tr -d ' ')"
+context="Existing worktree changes detected at session start (${count} paths; first 12 shown). Preserve unrelated changes:\n${status}"
+jq -n --arg context "$context" '{
+  hookSpecificOutput: {
+    hookEventName: "SessionStart",
+    additionalContext: $context
+  }
+}'

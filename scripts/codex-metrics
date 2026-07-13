@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 || ! -r "$1" ]]; then
+  echo "Usage: scripts/codex-metrics CODEX_JSONL" >&2
+  exit 2
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required to summarize Codex JSONL usage" >&2
+  exit 1
+fi
+
+jq -s '
+  [.[] | select(.type == "turn.completed") | (.usage // {})] as $usage
+  | {
+      turns: ($usage | length),
+      input_tokens: ([$usage[] | (.input_tokens // 0)] | add // 0),
+      cached_input_tokens: ([$usage[] | (.cached_input_tokens // 0)] | add // 0),
+      output_tokens: ([$usage[] | (.output_tokens // 0)] | add // 0),
+      reasoning_output_tokens: ([$usage[] | (.reasoning_output_tokens // 0)] | add // 0)
+    }
+  | . + {
+      uncached_input_tokens: ([.input_tokens - .cached_input_tokens, 0] | max),
+      cache_hit_percent: (
+        if .input_tokens == 0 then 0
+        else ((.cached_input_tokens * 10000 / .input_tokens) | round) / 100
+        end
+      )
+    }
+' "$1"
