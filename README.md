@@ -18,7 +18,23 @@
 
 ## インストール
 
-[mise](https://mise.jdx.dev/) をインストールし、このリポジトリを取得したディレクトリでビルドします。
+npm を利用する場合は、プロジェクトへの追加または一度だけの実行ができます。
+
+```sh
+npm install --save-dev storymesh
+npx storymesh check src/components --framework react
+```
+
+グローバルにインストールする場合は次のとおりです。
+
+```sh
+npm install --global storymesh
+storymesh --help
+```
+
+対応する npm 配布環境は、glibc Linux x64/ARM64、macOS x64/ARM64、Windows x64 です。Node.js 18 以上が必要です。
+
+ソースからビルドする場合は、[mise](https://mise.jdx.dev/) をインストールし、このリポジトリを取得したディレクトリで実行します。
 
 ```sh
 mise install
@@ -150,6 +166,8 @@ mise run format
 mise run lint
 mise run test
 mise run check
+mise run npm-check
 ```
 
 Codex 開発ハーネスの運用方法は [docs/codex-harness.md](docs/codex-harness.md) を参照してください。
+npm 公開を行うメンテナー向けの手順は [npm 公開手順](docs/npm-publishing.md) を参照してください。

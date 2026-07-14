@@ -1,0 +1,27 @@
+{
+  "name": "storymesh-linux-arm64",
+  "version": "0.1.0",
+  "description": "storymesh binary for Linux ARM64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Inoue416/storymesh.git"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "preferUnplugged": true,
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
