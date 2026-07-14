@@ -39,12 +39,16 @@ struct ScanArgs {
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum CliFramework {
     React,
+    Vue,
+    Angular,
 }
 
 impl From<CliFramework> for Framework {
     fn from(framework: CliFramework) -> Self {
         match framework {
             CliFramework::React => Self::React,
+            CliFramework::Vue => Self::Vue,
+            CliFramework::Angular => Self::Angular,
         }
     }
 }
@@ -153,6 +157,23 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(Command::Check(args)) if args.path == Path::new("components")
+        ));
+    }
+
+    #[test]
+    fn parses_vue_and_angular_frameworks() {
+        let vue = Cli::try_parse_from(["storymesh", "check", "--framework", "vue"])
+            .expect("the Vue framework should parse");
+        let angular = Cli::try_parse_from(["storymesh", "check", "--framework", "angular"])
+            .expect("the Angular framework should parse");
+
+        assert!(matches!(
+            vue.command,
+            Some(Command::Check(args)) if Framework::from(args.framework) == Framework::Vue
+        ));
+        assert!(matches!(
+            angular.command,
+            Some(Command::Check(args)) if Framework::from(args.framework) == Framework::Angular
         ));
     }
 
