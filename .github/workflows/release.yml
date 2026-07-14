@@ -1,0 +1,103 @@
+name: Release npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish after building (enable only after trusted publishing is configured)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Validate release version and npm package metadata
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            node scripts/check-npm-version.mjs "${GITHUB_REF_NAME#v}"
+          else
+            node scripts/check-npm-version.mjs
+          fi
+          node --test npm/test/*.test.cjs
+          node scripts/check-npm-packages.mjs
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            package: storymesh-darwin-arm64
+            binary: storymesh
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            package: storymesh-darwin-x64
+            binary: storymesh
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            package: storymesh-linux-arm64
+            binary: storymesh
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            package: storymesh-linux-x64
+            binary: storymesh
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            package: storymesh-win32-x64
+            binary: storymesh.exe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Check npm trusted publishing support
+        run: |
+          npm --version
+          node -e "const { execFileSync } = require('node:child_process'); const [major, minor] = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && minor < 5)) process.exit(1)"
+      - name: Prepare package tarballs
+        run: node scripts/npm-packages.mjs artifacts release-npm
+      - name: Publish platform packages, then the CLI package
+        run: node scripts/publish-npm-packages.mjs release-npm

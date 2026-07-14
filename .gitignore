@@ -1,2 +1,4 @@
 /target
+.codex-runs/
+.storymesh-test-apps/
 .DS_Store

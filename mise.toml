@@ -1,4 +1,5 @@
 [tools]
+node = "24"
 rust = "stable"
 
 [env]
@@ -21,11 +22,35 @@ run = "cargo test --all-features"
 description = "Type-check the project"
 run = "cargo check --all-targets --all-features"
 
-[tasks.verify]
-description = "Run formatting, linting, tests, and type checks"
+[tasks.harness]
+description = "Validate the Codex development harness"
+run = "scripts/harness-audit"
+
+[tasks.handoff]
+description = "Run the smallest valid final gate and record its evidence"
+run = ".agents/skills/storymesh-handoff/scripts/check-change --run"
+
+[tasks.npm-check]
+description = "Validate npm package metadata, launcher, and tarball contents"
 run = [
+  "node scripts/check-npm-version.mjs",
+  "node --test npm/test/*.test.cjs",
+  "node scripts/check-npm-packages.mjs",
+]
+
+[tasks.quick]
+description = "Run the fast edit-loop checks"
+run = [
+  "cargo fmt --check",
+  "cargo test --all-features",
+]
+
+[tasks.verify]
+description = "Run the complete local and CI quality gate"
+run = [
+  "scripts/harness-audit",
   "cargo fmt --check",
   "cargo clippy --all-targets --all-features -- -D warnings",
   "cargo test --all-features",
-  "cargo check --all-targets --all-features",
+  "mise run npm-check",
 ]

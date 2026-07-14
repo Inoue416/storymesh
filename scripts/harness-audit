@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+
+failures=0
+
+pass() { printf 'ok   %s\n' "$1"; }
+fail() { printf 'fail %s\n' "$1" >&2; failures=$((failures + 1)); }
+
+for file in \
+  AGENTS.md \
+  .codex/config.toml \
+  .codex/hooks/session-context \
+  .codex/hooks/stop-quality-gate \
+  .agents/skills/storymesh-handoff/SKILL.md \
+  .agents/skills/storymesh-handoff/agents/openai.yaml \
+  .agents/skills/storymesh-handoff/scripts/check-change \
+  scripts/codex-task \
+  scripts/codex-metrics; do
+  if [[ -s "$file" ]]; then
+    pass "$file exists"
+  else
+    fail "$file is missing or empty"
+  fi
+done
+
+agents_bytes="$(wc -c < AGENTS.md | tr -d ' ')"
+if (( agents_bytes <= 8192 )); then
+  pass "AGENTS.md context budget (${agents_bytes}/8192 bytes)"
+else
+  fail "AGENTS.md exceeds 8192-byte context budget (${agents_bytes} bytes)"
+fi
+
+for phrase in "mise run quick" "mise run verify" "Verification matrix" "token discipline"; do
+  if rg --fixed-strings --quiet "$phrase" AGENTS.md; then
+    pass "AGENTS.md contains: $phrase"
+  else
+    fail "AGENTS.md is missing: $phrase"
+  fi
+done
+
+for setting in \
+  'model_reasoning_effort = "medium"' \
+  'model_reasoning_summary = "concise"' \
+  'model_verbosity = "low"' \
+  'project_doc_max_bytes = 8192' \
+  'hooks = true' \
+  'hooks/session-context' \
+  'hooks/stop-quality-gate'; do
+  if rg --fixed-strings --quiet "$setting" .codex/config.toml; then
+    pass ".codex/config.toml contains: $setting"
+  else
+    fail ".codex/config.toml is missing: $setting"
+  fi
+done
+
+if bash -n \
+  scripts/codex-task \
+  scripts/codex-metrics \
+  scripts/harness-audit \
+  .codex/hooks/session-context \
+  .codex/hooks/stop-quality-gate \
+  .agents/skills/storymesh-handoff/scripts/check-change; then
+  pass "shell syntax"
+else
+  fail "shell syntax"
+fi
+
+for executable in \
+  .codex/hooks/session-context \
+  .codex/hooks/stop-quality-gate \
+  .agents/skills/storymesh-handoff/scripts/check-change; do
+  if [[ -x "$executable" ]]; then
+    pass "$executable is executable"
+  else
+    fail "$executable is not executable"
+  fi
+done
+
+if rg --quiet '^name: storymesh-handoff$' .agents/skills/storymesh-handoff/SKILL.md \
+  && rg --quiet '^description: .+Use when .+' .agents/skills/storymesh-handoff/SKILL.md \
+  && ! rg --quiet 'TODO' .agents/skills/storymesh-handoff; then
+  pass "storymesh-handoff skill metadata"
+else
+  fail "storymesh-handoff skill metadata"
+fi
+
+if scripts/codex-task fast --dry-run | rg --quiet 'model_reasoning_effort=.*low'; then
+  pass "fast mode resolves to low reasoning"
+else
+  fail "fast mode reasoning override"
+fi
+
+if scripts/codex-task deep --dry-run | rg --quiet 'model_reasoning_effort=.*high'; then
+  pass "deep mode resolves to high reasoning"
+else
+  fail "deep mode reasoning override"
+fi
+
+fixture="$(mktemp -d)"
+cleanup() { rm -rf "$fixture"; }
+trap cleanup EXIT
+
+mkdir -p \
+  "$fixture/.agents/skills/storymesh-handoff/scripts" \
+  "$fixture/.codex/hooks"
+cp .agents/skills/storymesh-handoff/scripts/check-change \
+  "$fixture/.agents/skills/storymesh-handoff/scripts/check-change"
+cp .codex/hooks/session-context .codex/hooks/stop-quality-gate \
+  "$fixture/.codex/hooks/"
+printf '# fixture\n' > "$fixture/README.md"
+git -C "$fixture" init --quiet
+git -C "$fixture" add .
+git -C "$fixture" \
+  -c user.name='Harness Audit' \
+  -c user.email='harness@example.invalid' \
+  commit --quiet -m baseline
+printf '\ndocumentation change\n' >> "$fixture/README.md"
+
+if [[ "$(cd "$fixture" && .agents/skills/storymesh-handoff/scripts/check-change --print)" == "harness" ]]; then
+  pass "handoff selects harness for docs-only changes"
+else
+  fail "handoff docs-only gate selection"
+fi
+
+mkdir -p "$fixture/src"
+printf 'fn main() {}\n' > "$fixture/src/main.rs"
+if [[ "$(cd "$fixture" && .agents/skills/storymesh-handoff/scripts/check-change --print)" == "verify" ]]; then
+  pass "handoff selects verify for code changes"
+else
+  fail "handoff code gate selection"
+fi
+
+session_output="$(
+  jq -n --arg cwd "$fixture" '{cwd: $cwd, hook_event_name: "SessionStart", source: "startup"}' \
+    | "$fixture/.codex/hooks/session-context"
+)"
+if jq -e '.hookSpecificOutput.hookEventName == "SessionStart" and (.hookSpecificOutput.additionalContext | contains("README.md"))' \
+  >/dev/null <<<"$session_output"; then
+  pass "SessionStart hook reports dirty worktree"
+else
+  fail "SessionStart hook output"
+fi
+
+stop_output="$(
+  jq -n --arg cwd "$fixture" '{cwd: $cwd, hook_event_name: "Stop", stop_hook_active: false}' \
+    | "$fixture/.codex/hooks/stop-quality-gate"
+)"
+if jq -e '.decision == "block" and (.reason | contains("mise run verify"))' \
+  >/dev/null <<<"$stop_output"; then
+  pass "Stop hook requests the selected unverified gate"
+else
+  fail "Stop hook unverified output"
+fi
+
+stop_active_output="$(
+  jq -n --arg cwd "$fixture" '{cwd: $cwd, hook_event_name: "Stop", stop_hook_active: true}' \
+    | "$fixture/.codex/hooks/stop-quality-gate"
+)"
+if jq -e '. == {}' >/dev/null <<<"$stop_active_output"; then
+  pass "Stop hook prevents continuation loops"
+else
+  fail "Stop hook continuation guard"
+fi
+
+metrics_fixture='{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":75,"output_tokens":20,"reasoning_output_tokens":5}}'
+metrics_output="$(printf '%s\n' "$metrics_fixture" | scripts/codex-metrics /dev/stdin)"
+if jq -e '.uncached_input_tokens == 25 and .cache_hit_percent == 75 and .reasoning_output_tokens == 5' >/dev/null <<<"$metrics_output"; then
+  pass "token metrics aggregation"
+else
+  fail "token metrics aggregation"
+fi
+
+if git diff --check; then
+  pass "git diff whitespace check"
+else
+  fail "git diff whitespace check"
+fi
+
+if (( failures > 0 )); then
+  printf '\n%d harness check(s) failed\n' "$failures" >&2
+  exit 1
+fi
+
+printf '\nHarness audit passed\n'

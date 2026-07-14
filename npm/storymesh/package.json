@@ -1,0 +1,33 @@
+{
+  "name": "storymesh",
+  "version": "0.1.0",
+  "description": "Audit Storybook story coverage and report gaps.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Inoue416/storymesh.git"
+  },
+  "homepage": "https://github.com/Inoue416/storymesh#readme",
+  "bugs": "https://github.com/Inoue416/storymesh/issues",
+  "bin": {
+    "storymesh": "bin/storymesh.cjs"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "storymesh-darwin-arm64": "0.1.0",
+    "storymesh-darwin-x64": "0.1.0",
+    "storymesh-linux-arm64": "0.1.0",
+    "storymesh-linux-x64": "0.1.0",
+    "storymesh-win32-x64": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

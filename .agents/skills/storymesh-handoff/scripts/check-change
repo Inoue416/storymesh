@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: check-change [--print|--status|--run]
+
+  --print   Print the selected gate: none, harness, or verify (default).
+  --status  Print clean, verified, or unverified plus the selected gate.
+  --run     Run the selected gate and record the verified worktree fingerprint.
+EOF
+}
+
+mode="print"
+case "${1:---print}" in
+  --print) mode="print" ;;
+  --status) mode="status" ;;
+  --run) mode="run" ;;
+  -h|--help) usage; exit 0 ;;
+  *) usage >&2; exit 2 ;;
+esac
+[[ $# -le 1 ]] || { usage >&2; exit 2; }
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "check-change must run inside a Git worktree" >&2
+  exit 2
+}
+cd "$root"
+
+changed=()
+while IFS= read -r -d '' file; do
+  changed+=("$file")
+done < <(git diff --name-only -z HEAD --)
+while IFS= read -r -d '' file; do
+  changed+=("$file")
+done < <(git ls-files --others --exclude-standard -z)
+
+gate="none"
+if (( ${#changed[@]} > 0 )); then
+  gate="harness"
+  for file in "${changed[@]}"; do
+    case "$file" in
+      *.md|docs/*|.agents/skills/*/SKILL.md|.agents/skills/*/agents/openai.yaml)
+        ;;
+      *)
+        gate="verify"
+        break
+        ;;
+    esac
+  done
+fi
+
+fingerprint() {
+  {
+    git diff --no-ext-diff --binary HEAD --
+    while IFS= read -r -d '' file; do
+      printf 'untracked %s\n' "$file"
+      git hash-object -- "$file"
+    done < <(git ls-files --others --exclude-standard -z)
+  } | git hash-object --stdin
+}
+
+stamp=".codex-runs/handoff.json"
+
+case "$mode" in
+  print)
+    printf '%s\n' "$gate"
+    ;;
+  status)
+    if [[ "$gate" == "none" ]]; then
+      echo "clean none"
+      exit 0
+    fi
+    current="$(fingerprint)"
+    recorded=""
+    if [[ -r "$stamp" ]] && command -v jq >/dev/null 2>&1; then
+      recorded="$(jq -r '.fingerprint // empty' "$stamp" 2>/dev/null || true)"
+    fi
+    if [[ "$current" == "$recorded" ]]; then
+      printf 'verified %s\n' "$gate"
+      exit 0
+    fi
+    printf 'unverified %s\n' "$gate"
+    exit 1
+    ;;
+  run)
+    if [[ "$gate" == "none" ]]; then
+      echo "No worktree changes to verify"
+      exit 0
+    fi
+    before="$(fingerprint)"
+    mise run "$gate"
+    after="$(fingerprint)"
+    if [[ "$before" != "$after" ]]; then
+      echo "Worktree changed during verification; rerun the handoff gate" >&2
+      exit 1
+    fi
+    command -v jq >/dev/null 2>&1 || {
+      echo "jq is required to record handoff evidence" >&2
+      exit 1
+    }
+    mkdir -p .codex-runs
+    jq -n \
+      --arg fingerprint "$after" \
+      --arg gate "$gate" \
+      --arg verified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '{fingerprint: $fingerprint, gate: $gate, verified_at: $verified_at}' \
+      > "$stamp"
+    printf 'Verified current worktree with mise run %s\n' "$gate"
+    ;;
+esac
