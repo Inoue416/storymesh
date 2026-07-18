@@ -1,15 +1,15 @@
 use std::io::{self, Write};
 
-use storymesh::{CoverageReport, scan};
+use storymesh::{CoverageReport, generate_story_skeletons, scan};
 
 use super::{
-    args::{Cli, Command, ScanArgs},
-    output::{print_check, print_coverage, print_report},
+    args::{CheckArgs, Cli, Command, ScanArgs},
+    output::{print_check, print_coverage, print_generated, print_report},
 };
 
 pub(crate) fn run(cli: Cli, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
     match cli.command {
-        Some(Command::Check(args)) => execute(args, stdout, stderr, print_check),
+        Some(Command::Check(args)) => execute_check(args, stdout, stderr),
         Some(Command::Coverage(args)) => execute(args, stdout, stderr, print_coverage),
         Some(Command::Report(args)) => execute(args, stdout, stderr, print_report),
         None => {
@@ -19,6 +19,42 @@ pub(crate) fn run(cli: Cli, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u
             0
         }
     }
+}
+
+fn execute_check(args: CheckArgs, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
+    let framework = args.scan.framework.into();
+    let report = match scan(&args.scan.path, framework) {
+        Ok(report) => report,
+        Err(error) => {
+            let _ = writeln!(stderr, "error: {error}");
+            return 2;
+        }
+    };
+
+    let generated = if args.generate {
+        match generate_story_skeletons(&args.scan.path, &report) {
+            Ok(paths) => paths,
+            Err(error) => {
+                let _ = writeln!(stderr, "error: {error}");
+                return 2;
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
+    let code = match print_check(&report, stdout) {
+        Ok(code) => code,
+        Err(error) => {
+            let _ = writeln!(stderr, "failed to write output: {error}");
+            return 2;
+        }
+    };
+    if let Err(error) = print_generated(&generated, stdout) {
+        let _ = writeln!(stderr, "failed to write output: {error}");
+        return 2;
+    }
+    if args.generate { 0 } else { code }
 }
 
 fn execute(

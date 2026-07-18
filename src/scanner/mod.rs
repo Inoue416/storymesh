@@ -1,5 +1,6 @@
 mod detector;
 mod filesystem;
+mod generation;
 mod matching;
 
 use std::{collections::BTreeMap, path::Path};
@@ -7,6 +8,7 @@ use std::{collections::BTreeMap, path::Path};
 use crate::domain::{ComponentCoverage, CoverageReport, Framework};
 
 pub use filesystem::ScanError;
+pub use generation::{GenerateError, generate_story_skeletons};
 
 /// Scan a directory for components and corresponding Storybook stories.
 pub fn scan(root: &Path, framework: Framework) -> Result<CoverageReport, ScanError> {

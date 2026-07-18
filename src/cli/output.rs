@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
 use storymesh::CoverageReport;
 
@@ -36,6 +39,18 @@ pub(super) fn print_coverage(report: &CoverageReport, output: &mut dyn Write) ->
         report.components.len()
     )?;
     Ok(0)
+}
+
+pub(super) fn print_generated(paths: &[PathBuf], output: &mut dyn Write) -> io::Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(output, "Generated {} story skeleton(s):", paths.len())?;
+    for path in paths {
+        writeln!(output, "{}", path.display())?;
+    }
+    Ok(())
 }
 
 pub(super) fn print_report(report: &CoverageReport, output: &mut dyn Write) -> io::Result<u8> {

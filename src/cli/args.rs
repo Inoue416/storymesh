@@ -14,11 +14,21 @@ pub(crate) struct Cli {
 #[derive(Debug, Subcommand)]
 pub(super) enum Command {
     /// Find components that do not have a corresponding story file.
-    Check(ScanArgs),
+    Check(CheckArgs),
     /// Calculate the ratio of components with at least one story file.
     Coverage(ScanArgs),
     /// Show covered and missing component totals.
     Report(ScanArgs),
+}
+
+#[derive(Clone, Debug, Args)]
+pub(super) struct CheckArgs {
+    #[command(flatten)]
+    pub(super) scan: ScanArgs,
+
+    /// Generate a minimal story file beside each component missing one.
+    #[arg(long)]
+    pub(super) generate: bool,
 }
 
 #[derive(Clone, Debug, Args)]

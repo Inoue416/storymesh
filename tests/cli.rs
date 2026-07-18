@@ -50,3 +50,40 @@ fn invalid_roots_return_an_actionable_error() {
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("directory-that-does-not-exist"));
 }
+
+#[test]
+fn check_generate_writes_story_skeletons_and_returns_zero() {
+    let project = TestProject::new();
+    project.add_with_contents("Card.tsx", "export default function Card() {}\n");
+
+    let output = run(&[
+        "check",
+        project.root.to_str().expect("UTF-8 test path"),
+        "--generate",
+    ]);
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert!(project.root.join("Card.stories.tsx").is_file());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Generated 1 story skeleton(s):"));
+    assert!(stdout.contains("Card.stories.tsx"));
+}
+
+#[test]
+fn check_generate_returns_two_when_a_story_target_exists() {
+    let project = TestProject::new();
+    project.add_with_contents("Card.tsx", "export default function Card() {}\n");
+    std::fs::create_dir(project.root.join("Card.stories.tsx"))
+        .expect("the conflicting directory should be created");
+
+    let output = run(&[
+        "check",
+        project.root.to_str().expect("UTF-8 test path"),
+        "--generate",
+    ]);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
+}
