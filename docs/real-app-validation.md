@@ -14,6 +14,23 @@
 
 各アプリの `package.json` には、リポジトリ本体をそのアプリの `src` に対して実行する `pnpm run storymesh` も登録した。3 アプリすべてでこのスクリプトを実行し、表の実測値を確認した。
 
+### React のスケルトン生成を手元でデバッグする
+
+検証用 React アプリが `.storymesh-test-apps/react-app` にある環境では、次の手順で missing の再現から生成後の Storybook 表示まで確認できる。
+
+```sh
+cd .storymesh-test-apps/react-app
+pnpm storymesh:reset
+pnpm storymesh:check       # missing を表示し、終了コード 1
+pnpm storymesh:generate    # 対応する *.stories.tsx を生成し、終了コード 0
+pnpm storymesh:check       # 全件 covered、終了コード 0
+pnpm build
+pnpm build-storybook
+pnpm storybook             # http://localhost:6006/
+```
+
+`MissingCard.tsx` は named export、`Sample2.tsx` は export のない空ファイルである。これにより、named import の生成と、import 可能な export がない場合のプレースホルダー生成を確認できる。詳しい期待結果は同アプリの `DEBUGGING.md` に記載している。
+
 ## 実アプリで見つけて修正した問題
 
 - `stories/Button.tsx` と `stories/Button.stories.ts` のように component と story が同じ `stories` ディレクトリにある Storybook 標準配置を 0% と誤判定していた。実パスと、別置き story 用の正規化パスを両方照合するよう修正した。

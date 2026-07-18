@@ -5,6 +5,7 @@
 次の用途を想定しています。
 
 - story がないコンポーネントを一覧表示する
+- story がないコンポーネント用の最小 story を生成する
 - Storybook coverage を件数とパーセントで確認する
 - CI で story の追加漏れを検知する
 
@@ -72,8 +73,25 @@ All 3 React components have stories.
 story がないコンポーネントを一覧表示します。CI で追加漏れを検知する場合に使用します。
 
 ```sh
-./target/release/storymesh check [PATH] [--framework react|vue|angular]
+./target/release/storymesh check [PATH] [--framework react|vue|angular] [--generate]
 ```
+
+`--generate` を指定すると、missing として検出した各コンポーネントと同じディレクトリに、最小の [Component Story Format (CSF)](https://storybook.js.org/docs/api/csf) story を生成します。
+
+```sh
+./target/release/storymesh check src/components --framework react --generate
+```
+
+```text
+Missing stories for 1 React component(s):
+Card.tsx
+Generated 1 story skeleton(s):
+Card.stories.tsx
+```
+
+`--generate` 指定時は missing の有無ではなく生成処理の成否を終了コードで示します。すべて生成できた場合（生成対象がない場合を含む）は `0`、生成に失敗した場合は `2` です。生成した story を含めて再度 `check` すると coverage 済みとして扱われます。既存ファイルは上書きしません。
+
+React はコンポーネントと同じ拡張子（例: `Button.tsx` → `Button.stories.tsx`）、Vue と Angular は `.stories.ts` を生成します。React は default export と、ファイル名に対応する一般的な named export を判別します。import 可能な export が見つからない場合は、Storybook 上で編集を始められる `render: () => null` のプレースホルダーを生成します。Vue は default export、Angular は一般的なクラス名（例: `user-card.component.ts` → `UserCardComponent`）を前提とするため、プロジェクトの export が異なる場合は生成後に import を調整してください。
 
 ### `coverage`
 
@@ -107,11 +125,11 @@ profile.ts
 
 | 終了コード | 意味 |
 | --- | --- |
-| `0` | 検査またはレポートが正常に完了した。`check` では missing がない |
-| `1` | `check` が story のないコンポーネントを検出した |
+| `0` | 正常終了した。通常の `check` では missing がなく、`--generate` 指定時は生成に成功した |
+| `1` | 通常の `check` が story のないコンポーネントを検出した |
 | `2` | パスの読み取りや出力などでエラーが発生した |
 
-`coverage` と `report` は missing があっても正常終了します。missing を CI の失敗として扱う場合は `check` を使用してください。
+`coverage`、`report`、生成に成功した `check --generate` は missing があっても正常終了します。missing を CI の失敗として扱う場合は `--generate` を付けない `check` を使用してください。
 
 ## 検出規則
 
