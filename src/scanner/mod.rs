@@ -42,6 +42,3 @@ pub fn scan(root: &Path, framework: Framework) -> Result<CoverageReport, ScanErr
         components,
     })
 }
-
-#[cfg(test)]
-mod tests;

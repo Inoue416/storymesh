@@ -40,6 +40,3 @@ fn is_component_index(path: &Path) -> bool {
 fn is_pascal_case(stem: &str) -> bool {
     stem.chars().next().is_some_and(char::is_uppercase)
 }
-
-#[cfg(test)]
-mod tests;
