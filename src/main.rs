@@ -5,7 +5,7 @@ use std::{
 };
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use storymesh::{CoverageReport, Framework, scan};
+use storymesh::{CoverageReport, Framework, generate_story_skeletons, scan};
 
 /// Audit Storybook story coverage and report gaps.
 #[derive(Debug, Parser)]
@@ -18,11 +18,21 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Find components that do not have a corresponding story file.
-    Check(ScanArgs),
+    Check(CheckArgs),
     /// Calculate the ratio of components with at least one story file.
     Coverage(ScanArgs),
     /// Show covered and missing component totals.
     Report(ScanArgs),
+}
+
+#[derive(Clone, Debug, Args)]
+struct CheckArgs {
+    #[command(flatten)]
+    scan: ScanArgs,
+
+    /// Generate a minimal story file beside each component missing one.
+    #[arg(long)]
+    generate: bool,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -60,7 +70,7 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
     match cli.command {
-        Some(Command::Check(args)) => execute(args, stdout, stderr, print_check),
+        Some(Command::Check(args)) => execute_check(args, stdout, stderr),
         Some(Command::Coverage(args)) => execute(args, stdout, stderr, print_coverage),
         Some(Command::Report(args)) => execute(args, stdout, stderr, print_report),
         None => {
@@ -70,6 +80,54 @@ fn run(cli: Cli, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
             0
         }
     }
+}
+
+fn execute_check(args: CheckArgs, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
+    let framework = args.scan.framework.into();
+    let report = match scan(&args.scan.path, framework) {
+        Ok(report) => report,
+        Err(error) => {
+            let _ = writeln!(stderr, "error: {error}");
+            return 2;
+        }
+    };
+
+    let generated = if args.generate {
+        match generate_story_skeletons(&args.scan.path, &report) {
+            Ok(paths) => paths,
+            Err(error) => {
+                let _ = writeln!(stderr, "error: {error}");
+                return 2;
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
+    let code = match print_check(&report, stdout) {
+        Ok(code) => code,
+        Err(error) => {
+            let _ = writeln!(stderr, "failed to write output: {error}");
+            return 2;
+        }
+    };
+    if let Err(error) = print_generated(&generated, stdout) {
+        let _ = writeln!(stderr, "failed to write output: {error}");
+        return 2;
+    }
+    if args.generate { 0 } else { code }
+}
+
+fn print_generated(paths: &[PathBuf], output: &mut dyn Write) -> io::Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(output, "Generated {} story skeleton(s):", paths.len())?;
+    for path in paths {
+        writeln!(output, "{}", path.display())?;
+    }
+    Ok(())
 }
 
 fn execute(
@@ -142,7 +200,11 @@ fn print_report(report: &CoverageReport, output: &mut dyn Write) -> io::Result<u
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     use clap::Parser;
     use storymesh::{ComponentCoverage, CoverageReport, Framework};
@@ -156,7 +218,7 @@ mod tests {
 
         assert!(matches!(
             cli.command,
-            Some(Command::Check(args)) if args.path == Path::new("components")
+            Some(Command::Check(args)) if args.scan.path == Path::new("components")
         ));
     }
 
@@ -169,11 +231,11 @@ mod tests {
 
         assert!(matches!(
             vue.command,
-            Some(Command::Check(args)) if Framework::from(args.framework) == Framework::Vue
+            Some(Command::Check(args)) if Framework::from(args.scan.framework) == Framework::Vue
         ));
         assert!(matches!(
             angular.command,
-            Some(Command::Check(args)) if Framework::from(args.framework) == Framework::Angular
+            Some(Command::Check(args)) if Framework::from(args.scan.framework) == Framework::Angular
         ));
     }
 
@@ -215,5 +277,71 @@ mod tests {
         assert!(output.contains("Missing stories for 1 React component(s)"));
         assert!(output.contains("Card.tsx"));
         assert!(!output.contains("Button.tsx"));
+    }
+
+    #[test]
+    fn check_generate_writes_a_skeleton_and_returns_zero() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("the clock should be after the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "storymesh-cli-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("the test directory should be created");
+        fs::write(root.join("Card.tsx"), "export default function Card() {}\n")
+            .expect("the component should be written");
+        let cli = Cli::try_parse_from([
+            "storymesh",
+            "check",
+            root.to_str().expect("the temporary path should be UTF-8"),
+            "--generate",
+        ])
+        .expect("the generate option should parse");
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+
+        let code = run(cli, &mut stdout, &mut stderr);
+
+        assert_eq!(code, 0);
+        assert!(stderr.is_empty());
+        assert!(root.join("Card.stories.tsx").is_file());
+        let output = String::from_utf8_lossy(&stdout);
+        assert!(output.contains("Generated 1 story skeleton(s)"));
+        assert!(output.contains("Card.stories.tsx"));
+        fs::remove_dir_all(root).expect("the test directory should be removed");
+    }
+
+    #[test]
+    fn check_generate_returns_two_when_a_skeleton_cannot_be_created() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("the clock should be after the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "storymesh-cli-error-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join("Card.stories.tsx"))
+            .expect("the conflicting directory should be created");
+        fs::write(root.join("Card.tsx"), "export default function Card() {}\n")
+            .expect("the component should be written");
+        let cli = Cli::try_parse_from([
+            "storymesh",
+            "check",
+            root.to_str().expect("the temporary path should be UTF-8"),
+            "--generate",
+        ])
+        .expect("the generate option should parse");
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+
+        let code = run(cli, &mut stdout, &mut stderr);
+
+        assert_eq!(code, 2);
+        assert!(stdout.is_empty());
+        assert!(String::from_utf8_lossy(&stderr).contains("already exists"));
+        fs::remove_dir_all(root).expect("the test directory should be removed");
     }
 }
