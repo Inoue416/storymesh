@@ -170,8 +170,6 @@ profile.ts
 - React の非コンポーネント `.jsx` / `.tsx` や、Vue の画面・レイアウトもコンポーネントとして数える場合があります。
 - Angular の `Component` を別名 import した suffix-less component は検出しません。
 
-実アプリでの検証結果と詳細な未対応ケースは [実アプリ検証メモ](docs/real-app-validation.md) を参照してください。
-
 ## 開発
 
 開発用コマンドは `mise` 経由で実行します。ハーネス検査には `jq` も必要です。
