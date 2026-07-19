@@ -246,3 +246,9 @@ mise run npm-check
 
 Codex 開発ハーネスの運用方法は [docs/codex-harness.md](docs/codex-harness.md) を参照してください。
 npm 公開を行うメンテナー向けの手順は [npm 公開手順](docs/npm-publishing.md) を参照してください。
+
+### 依存関係の更新
+
+依存関係の更新 PR は Renovate で管理します。リポジトリ管理者は
+[Renovate GitHub App](https://github.com/apps/renovate) をこのリポジトリにインストールしてください。
+設定は [renovate.json](renovate.json) にあり、Rust（Cargo）、npm、GitHub Actions の更新を検出します。
