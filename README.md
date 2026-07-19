@@ -33,6 +33,24 @@ npm install --global storymesh
 storymesh --help
 ```
 
+## AI エージェント向けスキル
+
+AI エージェントに story coverage の確認、missing story の検出、明示依頼時の
+story skeleton 生成を行わせる場合は、`npx skills` で `storymesh` スキルを導入できます。
+
+```sh
+npx skills add Inoue416/storymesh --skill storymesh
+```
+
+Codex のプロジェクト設定へ確認なしで導入する場合は、次を実行します。
+
+```sh
+npx skills add Inoue416/storymesh --skill storymesh --agent codex --yes
+```
+
+配布・公開の詳細は [AI エージェント向けスキルの配布・公開手順](docs/skills-publishing.md)
+を参照してください。
+
 対応する npm 配布環境は、glibc Linux x64/ARM64、macOS x64/ARM64、Windows x64 です。Node.js 18 以上が必要です。
 
 ソースからビルドする場合は、[mise](https://mise.jdx.dev/) をインストールし、このリポジトリを取得したディレクトリで実行します。
