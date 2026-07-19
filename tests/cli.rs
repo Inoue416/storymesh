@@ -87,3 +87,27 @@ fn check_generate_returns_two_when_a_story_target_exists() {
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
 }
+
+#[test]
+fn check_excludes_patterns_and_additional_ignore_files() {
+    let project = TestProject::new();
+    project.add("Button.tsx");
+    project.add("Generated.tsx");
+    project.add("Legacy.tsx");
+    project.add_with_contents("custom.ignore", "Legacy.tsx\n");
+
+    let output = run(&[
+        "check",
+        project.root.to_str().expect("UTF-8 test path"),
+        "--ignore",
+        "Generated.tsx",
+        "--ignore-file",
+        "custom.ignore",
+    ]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Button.tsx"));
+    assert!(!stdout.contains("Generated.tsx"));
+    assert!(!stdout.contains("Legacy.tsx"));
+}
