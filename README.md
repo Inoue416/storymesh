@@ -91,7 +91,7 @@ All 3 React components have stories.
 story がないコンポーネントを一覧表示します。CI で追加漏れを検知する場合に使用します。
 
 ```sh
-./target/release/storymesh check [PATH] [--framework react|vue|angular] [--generate]
+./target/release/storymesh check [PATH] [--framework react|vue|angular] [--ignore PATTERN] [--ignore-file PATH] [--generate]
 ```
 
 `--generate` を指定すると、missing として検出した各コンポーネントと同じディレクトリに、最小の [Component Story Format (CSF)](https://storybook.js.org/docs/api/csf) story を生成します。
@@ -139,6 +139,46 @@ profile.ts
 
 `PATH` を省略するとカレントディレクトリを検査します。`--framework` を省略した場合は `react` です。
 
+### 除外設定
+
+検査対象からパスを除外するには、`--ignore` を繰り返し指定します。パターンは検査ルートからの相対パスとして解釈されます。
+
+```sh
+./target/release/storymesh check src --ignore 'generated/**' --ignore '**/*.fixture.tsx'
+```
+
+検査ルートの `.storymeshignore` は自動的に読み込みます。`.gitignore` と同じ形式で、空行・`#` コメント・`!` による再包含・`*` / `**`・末尾の `/` を使用できます。
+
+```gitignore
+# generated components are not maintained by this repository
+generated/
+**/*.fixture.tsx
+!generated/DocumentedButton.tsx
+```
+
+別の ignore ファイルを追加する場合は `--ignore-file` を繰り返し指定できます。相対パスは検査ルートを基準に解決されます。
+
+開発環境の React、Vue、Angular テストアプリでは、次のコマンドで手動検証できます。
+通常の `storymesh:check` は意図的に未対応の fixture を 1 件報告し、後者の 2 コマンドは
+それぞれ `--ignore` と `--ignore-file` によって成功します。
+
+```sh
+cd .storymesh-test-apps/react-app
+pnpm storymesh:check
+pnpm storymesh:ignore-pattern
+pnpm storymesh:ignore-file
+
+cd ../vue-app
+pnpm storymesh:check
+pnpm storymesh:ignore-pattern
+pnpm storymesh:ignore-file
+
+cd ../angular-app
+pnpm storymesh:check
+pnpm storymesh:ignore-pattern
+pnpm storymesh:ignore-file
+```
+
 ## 終了コード
 
 | 終了コード | 意味 |
@@ -156,6 +196,7 @@ profile.ts
 - story はコンポーネントと同じディレクトリ、または直下の `stories` / `__stories__` ディレクトリから検索します。
 - story の拡張子は `.js`、`.jsx`、`.mjs`、`.cjs`、`.ts`、`.tsx` に対応します。
 - `.git`、`.next`、`.storybook`、`build`、`coverage`、`dist`、`node_modules`、`target` ディレクトリは走査しません。
+- `.storymeshignore`、`--ignore`、`--ignore-file` で除外したファイルは、component と story のいずれにも数えません。
 - `*.test.*`、`*.spec.*`、story 自身はコンポーネント数に含めません。
 
 ### React

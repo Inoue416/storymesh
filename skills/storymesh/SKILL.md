@@ -30,6 +30,30 @@ supports React, Vue, and Angular.
    or command context. `coverage` and `report` normally exit `0` even when
    stories are missing.
 
+## Exclude intentional gaps
+
+When files should not count toward coverage, prefer a committed
+`.storymeshignore` in the scan root. Its rules use Git ignore syntax, including
+comments, glob patterns, directory patterns, and `!` re-inclusion rules:
+
+```gitignore
+generated/
+**/*.fixture.tsx
+!generated/DocumentedButton.tsx
+```
+
+For a one-off command, pass `--ignore` once per pattern. To layer a generated
+or team-specific rule file on top of `.storymeshignore`, pass `--ignore-file`:
+
+```sh
+npx --yes storymesh check src/components --framework react --ignore 'generated/**'
+npx --yes storymesh check src/components --framework react --ignore-file .storymesh-ci-ignore
+```
+
+Ignore rules exclude both component and story files. Before adding a broad rule,
+run `report` and state which paths it removes from coverage; do not use an
+ignore rule to hide an unreviewed missing story.
+
 ## Generate only on request
 
 `--generate` writes new story files. Run it only when the user explicitly asks

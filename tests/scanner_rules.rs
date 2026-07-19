@@ -1,6 +1,8 @@
 mod support;
 
-use storymesh::{Framework, scan};
+use std::path::Path;
+
+use storymesh::{Framework, ScanOptions, scan, scan_with_options};
 
 use support::TestProject;
 
@@ -39,4 +41,59 @@ fn ignores_decorators_in_comments_and_strings() {
     let report = scan(&project.root, Framework::Angular).expect("the project should scan");
 
     assert!(report.components.is_empty());
+}
+
+#[test]
+fn ignores_paths_listed_in_the_default_storymeshignore_file() {
+    let project = TestProject::new();
+    project.add("src/Button.tsx");
+    project.add("src/generated/GeneratedCard.tsx");
+    project.add_with_contents("src/.storymeshignore", "generated/\n");
+
+    let report =
+        scan(&project.root.join("src"), Framework::React).expect("the project should scan");
+
+    assert_eq!(report.components.len(), 1);
+    assert_eq!(report.components[0].component, Path::new("Button.tsx"));
+}
+
+#[test]
+fn supports_gitignore_negation_rules() {
+    let project = TestProject::new();
+    project.add("src/generated/HiddenCard.tsx");
+    project.add("src/generated/DocumentedButton.tsx");
+    project.add_with_contents(
+        "src/.storymeshignore",
+        "generated/\n!generated/DocumentedButton.tsx\n",
+    );
+
+    let report =
+        scan(&project.root.join("src"), Framework::React).expect("the project should scan");
+
+    assert_eq!(report.components.len(), 1);
+    assert_eq!(
+        report.components[0].component,
+        Path::new("generated/DocumentedButton.tsx")
+    );
+}
+
+#[test]
+fn excludes_components_and_stories_with_explicit_ignore_patterns() {
+    let project = TestProject::new();
+    project.add("Button.tsx");
+    project.add("Ignored.tsx");
+    project.add("Ignored.stories.tsx");
+
+    let report = scan_with_options(
+        &project.root,
+        Framework::React,
+        &ScanOptions {
+            ignore_patterns: vec!["Ignored*".into()],
+            ignore_files: Vec::new(),
+        },
+    )
+    .expect("the project should scan");
+
+    assert_eq!(report.components.len(), 1);
+    assert_eq!(report.components[0].component, Path::new("Button.tsx"));
 }

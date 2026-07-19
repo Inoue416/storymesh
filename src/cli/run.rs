@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use storymesh::{CoverageReport, generate_story_skeletons, scan};
+use storymesh::{CoverageReport, ScanOptions, generate_story_skeletons, scan_with_options};
 
 use super::{
     args::{CheckArgs, Cli, Command, ScanArgs},
@@ -23,7 +23,7 @@ pub(crate) fn run(cli: Cli, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u
 
 fn execute_check(args: CheckArgs, stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
     let framework = args.scan.framework.into();
-    let report = match scan(&args.scan.path, framework) {
+    let report = match scan_with_options(&args.scan.path, framework, &scan_options(&args.scan)) {
         Ok(report) => report,
         Err(error) => {
             let _ = writeln!(stderr, "error: {error}");
@@ -64,7 +64,7 @@ fn execute(
     print: fn(&CoverageReport, &mut dyn Write) -> io::Result<u8>,
 ) -> u8 {
     let framework = args.framework.into();
-    match scan(&args.path, framework) {
+    match scan_with_options(&args.path, framework, &scan_options(&args)) {
         Ok(report) => match print(&report, stdout) {
             Ok(code) => code,
             Err(error) => {
@@ -76,5 +76,12 @@ fn execute(
             let _ = writeln!(stderr, "error: {error}");
             2
         }
+    }
+}
+
+fn scan_options(args: &ScanArgs) -> ScanOptions {
+    ScanOptions {
+        ignore_patterns: args.ignore.clone(),
+        ignore_files: args.ignore_file.clone(),
     }
 }

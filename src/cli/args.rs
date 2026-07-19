@@ -40,6 +40,14 @@ pub(super) struct ScanArgs {
     /// Component library to inspect.
     #[arg(long, value_enum, default_value_t = CliFramework::React)]
     pub(super) framework: CliFramework,
+
+    /// Ignore a path pattern. May be specified more than once.
+    #[arg(long, value_name = "PATTERN")]
+    pub(super) ignore: Vec<String>,
+
+    /// Load additional Git ignore-style patterns from this file. May be specified more than once.
+    #[arg(long, value_name = "PATH")]
+    pub(super) ignore_file: Vec<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
