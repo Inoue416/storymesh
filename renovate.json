@@ -2,5 +2,19 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Ignore unpublished Storymesh platform packages",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "storymesh-darwin-arm64",
+        "storymesh-darwin-x64",
+        "storymesh-linux-arm64",
+        "storymesh-linux-x64",
+        "storymesh-win32-x64"
+      ],
+      "enabled": false
+    }
   ]
 }
